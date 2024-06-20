@@ -22,7 +22,7 @@ io.on("connection", (socket) => {
   console.log(`User connected: ${socket.id}`);
 
   function getRandomColor() {
-    const colors = ["blue", "red", "black", "white"];
+    const colors = ["yellow", "red", "pink", "white"];
     return colors[Math.floor(Math.random() * colors.length)];
   }
 
