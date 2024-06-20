@@ -1,201 +1,144 @@
-// const fs = require("fs").promises;
-
 const { Server } = require("socket.io");
 
 const io = new Server({
-  /* options */
   cors: {
     origin: "*",
   },
 });
 
 const roomSession = {
-  players: [
-    {
-      id: 1,
-      name: "player1",
-      color: "blue",
-      position: 1,
-    },
-    {
-      id: 2,
-      name: "player2",
-      color: "red",
-      position: 1,
-    },
-    {
-      id: 3,
-      name: "player3",
-      color: "black",
-      position: 1,
-    },
-    {
-      id: 4,
-      name: "player4",
-      color: "white",
-      position: 1,
-    },
-  ],
+  players: [],
   name: "Test room",
   turn: 0,
 };
 
 io.on("connection", (socket) => {
-  console.log(socket.id);
-  socket.on("generateBoard", () => {
-    console.log("genene");
-    function generateBoard(size = 10) {
-      let board = [];
-      let counter = 1;
+  console.log(`User connected: ${socket.id}`);
 
-      for (let rowIndex = 0; rowIndex < size; rowIndex++) {
-        board[rowIndex] = [];
-        for (let colIndex = 0; colIndex < size; colIndex++) {
-          board[rowIndex][colIndex] = counter;
-          counter++;
-        }
-        if (rowIndex % 2) board[rowIndex] = board[rowIndex].reverse();
-      }
-      return board.reverse();
+  function getRandomColor() {
+    const colors = ["blue", "red", "black", "white"];
+    return colors[Math.floor(Math.random() * colors.length)];
+  }
+
+  socket.on("game:join", () => {
+    const newPlayer = {
+      id: socket.id,
+      name: `player${roomSession.players.length + 1}`,
+      color: getRandomColor(),
+      position: 1,
+    };
+    console.log(newPlayer.name);
+
+    if (roomSession.players.length < 2) {
+      roomSession.players.push(newPlayer);
     }
-    const board = generateBoard();
-    socket.emit("generated-board", board);
-    socket.emit("playes-position", roomSession.players);
+    io.emit("players-position", roomSession.players);
+    io.emit("current-turn", roomSession.turn);
+    socket.emit("player-info", newPlayer);
+
+    console.log(roomSession.players);
   });
 
-  socket.on("dice", () => {
-    let dice = randomDiceValue();
-    console.log(dice);
-    socket.emit("dice/number", dice);
+  // console.log(roomSession.players);
+
+  // Emit the new player's information to them
+
+  // Broadcast the updated player list to all clients
+
+  socket.on("generateBoard", () => {
+    const board = generateBoard();
+    io.emit("generated-board", board);
   });
+
+  socket.on("dice", (callback) => {
+    const playerIndex = roomSession.players.findIndex((player) => player.id === socket.id);
+    if (playerIndex !== roomSession.turn) {
+      socket.emit("error", "Not your turn");
+      return;
+    }
+
+    const dice = randomDiceValue();
+    callback(dice);
+    // io.emit("dice/number", dice);
+  });
+
   socket.on("maen", (dadu) => {
-    let urutan = roomSession.turn;
-    let currPlayer = roomSession.players[urutan];
     console.log(dadu);
+    const urutan = roomSession.turn;
+    const currPlayer = roomSession.players[urutan];
     currPlayer.position += dadu;
-    roomSession.turn = (roomSession.turn + 1) % 4;
-    socket.emit("playes-position", roomSession.players);
+
+    // io.emit("winner", () => {
+    //   let winner = false;
+    //   if (currPlayer.position >= 10) {
+    //     winner = true;
+    //     return winner;
+    //   }
+    // });
+
+    roomSession.turn = (roomSession.turn + 1) % roomSession.players.length;
+    console.log(roomSession);
+    io.emit("players-position", roomSession.players);
+    io.emit("current-turn", roomSession.turn);
+  });
+
+  socket.on("resetGame", () => {
+    roomSession.players.forEach((player) => {
+      player.position = 1;
+    });
+    roomSession.turn = 0;
+    io.emit("resetGame/position", roomSession.players);
+    io.emit("current-turn", roomSession.turn);
+  });
+
+  socket.on("disconnect", () => {
+    console.log(`User disconnected: ${socket.id}`);
+    roomSession.players = roomSession.players.filter((player) => player.id !== socket.id);
+
+    // Adjust the turn if the current player disconnects
+    if (roomSession.turn >= roomSession.players.length) {
+      roomSession.turn = 0;
+    }
+
+    io.emit("players-position", roomSession.players);
+    io.emit("current-turn", roomSession.turn);
+  });
+
+  // New event handler to disconnect all users
+  socket.on("disconnect-all", () => {
+    // Get all connected sockets
+    const connectedSockets = io.sockets.sockets;
+
+    // Iterate through each socket and disconnect it
+    connectedSockets.forEach((connectedSocket) => {
+      connectedSocket.disconnect(true); // true parameter forces close
+    });
+
+    // Clear the roomSession
+    roomSession.players = [];
+    roomSession.turn = 0;
+    io.emit("players-position", roomSession.players);
+    io.emit("current-turn", roomSession.turn);
   });
 });
 
-function randomDiceValue() {
-  let value = Math.floor(Math.random() * 12) + 1;
-  return value;
-}
+function generateBoard(size = 10) {
+  let board = [];
+  let counter = 1;
 
-//move player
-function movePlayer(player, diceValue) {
-  let currentPosition = player.position;
-  let moveValue = currentPosition + diceValue;
-  currentPosition = moveValue;
-  player.position = currentPosition;
-  if (player.position >= 100) {
-    return "Winner";
-  } else {
-    return { player, diceValue };
+  for (let rowIndex = 0; rowIndex < size; rowIndex++) {
+    board[rowIndex] = [];
+    for (let colIndex = 0; colIndex < size; colIndex++) {
+      board[rowIndex][colIndex] = counter;
+      counter++;
+    }
+    if (rowIndex % 2) board[rowIndex] = board[rowIndex].reverse();
   }
+  return board.reverse();
 }
 
-const playerId = 0;
-
-// do {
-//   //   console.log(movePlayer(roomSession.players[playerId], randomDiceValue()));
-//   //   console.log(roomSession.players[playerId]);
-// } while (roomSession.players[playerId].position < 100);
-
-//reset players position
-function resetGame() {
-  roomSession.players.map((player) => {
-    player.position = 1;
-  });
-  return;
+function randomDiceValue() {
+  return Math.floor(Math.random() * 12) + 1;
 }
-resetGame();
-
-// console.log(roomSession.players);
 
 io.listen(3000);
-
-// const { Server } = require("socket.io");
-
-// const io = new Server({
-//   cors: {
-//     origin: "*",
-//   },
-// });
-
-// const roomSession = {
-//   players: [
-//     { id: 1, name: "player1", color: "blue", position: 1 },
-//     { id: 2, name: "player2", color: "red", position: 1 },
-//     { id: 3, name: "player3", color: "green", position: 1 },
-//     { id: 4, name: "player4", color: "white", position: 1 },
-//   ],
-//   name: "Test room",
-// };
-
-// function generateBoard(size = 10) {
-//   let board = [];
-//   let counter = 1;
-
-//   for (let rowIndex = 0; rowIndex < size; rowIndex++) {
-//     board[rowIndex] = [];
-//     for (let colIndex = 0; colIndex < size; colIndex++) {
-//       board[rowIndex][colIndex] = counter;
-//       counter++;
-//     }
-//     if (rowIndex % 2) board[rowIndex] = board[rowIndex].reverse();
-//   }
-//   return board.reverse();
-// }
-
-// // console.log(generateBoard());
-
-// function randomDiceValue() {
-//   return Math.floor(Math.random() * 12) + 1;
-// }
-
-// function movePlayer(player, diceValue) {
-//   let currentPosition = player.position;
-//   let moveValue = currentPosition + diceValue;
-//   player.position = moveValue;
-//   return { player, diceValue };
-// }
-
-// function resetGame() {
-//   roomSession.players.forEach((player) => {
-//     player.position = 1;
-//   });
-// }
-
-// io.on("connection", (socket) => {
-//   console.log(`Player connected: ${socket.id}`);
-
-//   console.log(socket);
-//   socket.on("rollDice", (playerId) => {
-//     const player = roomSession.players.find((p) => p.id === playerId);
-//     console.log(player);
-//     if (player) {
-//       const diceValue = randomDiceValue();
-//       const result = movePlayer(player, diceValue);
-//       console.log(result);
-
-//       socket.emit("moveResult", result);
-//       io.emit("updatePlayers", roomSession.players);
-
-//       if (player.position >= 100) {
-//         io.emit("gameOver", player);
-//         resetGame();
-//         io.emit("updatePlayers", roomSession.players);
-//       }
-//     }
-//   });
-
-//   socket.on("disconnect", () => {
-//     console.log(`Player disconnected: ${socket.id}`);
-//   });
-
-//   socket.emit("initialize", { board: generateBoard(), players: roomSession.players });
-// });
-
-// io.listen(3000);
