@@ -1,6 +1,12 @@
+const express = require("express");
+const app = express();
+const http = require("http");
+
 const { Server } = require("socket.io");
 
-const io = new Server({
+const server = http.createServer(app);
+
+const io = new Server(server, {
   cors: {
     origin: "*",
   },
@@ -104,6 +110,31 @@ io.on("connection", (socket) => {
     io.emit("current-turn", roomSession.turn);
   });
 
+  socket.on("join_room", (data) => {
+    socket.join(data);
+    console.log(`User with ID: ${socket.id} joined room: ${data}`);
+  });
+
+  socket.on("send_message", ({ message, room: target }) => {
+    console.log("message received", message);
+    let option = {
+      message,
+      from: socket?.user?.username || socket.id,
+      created: new Date(),
+    };
+    console.log({ option, target });
+    if (target) {
+      socket.broadcast.to(target).emit("new-message", option);
+      // io.emit.to(target).emit("new-message", option);
+      // io.to(socket.id).emit("new-message", option);
+    } else {
+      // io.emit("new-message", option);
+    }
+  });
+
+  socket.on("disconnect", () => {
+    console.log("User Disconnected", socket.id);
+  });
   // New event handler to disconnect all users
   socket.on("disconnect-all", () => {
     // Get all connected sockets
