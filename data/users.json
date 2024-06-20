@@ -1,0 +1,12 @@
+[
+  {
+    "name": "player1",
+    "color": "red",
+    "position": 1
+  },
+  {
+    "name": "player2",
+    "color": "blue",
+    "position": 1
+  }
+]
